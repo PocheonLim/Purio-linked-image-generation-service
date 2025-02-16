@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 생성기</title>
+</head>
+
+<link rel="stylesheet" href="asdf.css">
+
+<body>
+    <div class="container">
+
+        <div class="left-panel">
+            <h2>생성 유형</h2>
+            <div class="button-group">
+                <p>주요 관점</p>
+                <button class="aspect-input-button" onclick="handleAspectInput(this)">직접 입력</button>
+                <input type="text" id="aspect-input" class="aspect-input-field" placeholder="ex. 청첩장"
+                    style="display:none; width: 100px;" onblur="handleAspectBlur(this)">
+                <button class="aspect-button" data-aspect="Poster">포스터</button>
+                <button class="aspect-button" data-aspect="Advertisement">광고</button>
+                <button class="aspect-button" data-aspect="Cartoon">만화</button>
+                <button class="aspect-button" data-aspect="Illustration">일러스트</button>
+                <button class="aspect-button" data-aspect="제품 렌더링">제품 렌더링</button>
+                <button class="aspect-button" data-aspect="Watercolor Painting">수채화</button>
+            </div>
+            <div class="button-group">
+                <p>그림 분위기</p>
+                <button class="mood-input-button" onclick="handleMoodInput(this)">직접 입력</button>
+                <input type="text" id="mood-input" class="mood-input-field" placeholder="ex. 동양풍"
+                    style="display:none; width: 100px;" onblur="handleMoodBlur(this)">
+                <button class="mood-button" data-mood="AUTO">미지정</button>
+                <button class="mood-button" data-mood="GENERAL">일반적</button>
+                <button class="mood-button" data-mood="REALISTIC">리얼리즘</button>
+                <button class="mood-button" data-mood="DESIGN">디자인</button>
+                <button class="mood-button" data-mood="RENDER_3D">3D 렌더링</button>
+            </div>
+            <!------------------------------------------------------------------------------------->
+            <h2>발송 내용</h2>
+            <div class="button-group" flex-direction: column>
+                <div style="display: flex; justify-content: center; align-items: center;">
+                    <p>안녕하세요, 고객님! 여기에 내용을 입력하세요.</p>
+                    <button id="send-history-button">발송 내역</button>
+                </div>
+            </div>
+            <textarea id="prompt" placeholder="여기에 텍스트를 입력하세요..." spellcheck="false"></textarea>
+            <!------------------------------------------------------------------------------------->
+            <h2>이미지에 포함하고 싶은 텍스트 (선택)</h2>
+            <div class="keywords-container">
+                <input type="text" id="keyword-input" placeholder="텍스트를 입력하세요..." spellcheck="false">
+            </div>
+            <button id="generate-button">이미지 생성</button>
+        </div>
+
+        <div class="middle-panel">
+            <div class="image-container-text">
+                <h2>이미지 생성 결과</h2>
+            </div>
+            <!------------------------------------------------------------------------------------->
+            <div class="image-container-generate">
+                <img id="generated-image" src="basic.png" alt="생성된 이미지">
+            </div>
+            <!------------------------------------------------------------------------------------->
+            <div class="image-container-history">
+                <div style="display: flex; justify-content: center; align-items: center;">
+                    <button id="history-prev-button" class="history-prev-button" onclick="prevImages()">이전</button>
+                    <img id="history-image-1" src="basic.png" alt="생성된 이미지"
+                        onclick="updateGeneratedImage('history-image-1')">
+                    <img id="history-image-2" src="basic.png" alt="생성된 이미지"
+                        onclick="updateGeneratedImage('history-image-2')">
+                    <button id="history-next-button" class="history-next-button" onclick="nextImages()">다음</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <h2>주소록</h2>
+            <div class="phone-group" id="phone-group">
+            </div>
+            <button id="Addphonebook-button" class="Addphonebook-button">주소록 추가</button>
+            <!------------------------------------------------------------------------------------->
+            <h2>수신 대상</h2>
+            <div class="phonenumber-container">
+                <input type="text" id="phonenumber-input" placeholder="전화번호를 입력하세요..." spellcheck="false">
+                <button id="add-phonenumber">추가</button>
+            </div>
+            <div class="phonenumber-list" id="phonenumber-list"></div>
+            <!------------------------------------------------------------------------------------->
+            <div class="send-button-container">
+                <button id="send-button">발송하기</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 팝업 구조 추가 -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span> <!--&times 는 곱하기 기호임. 창 닫기 버튼-->
+            <h2>발송 내역</h2>
+            <p>고객님의 발송 내역입니다.</p>
+            <p>원하시는 발송 내역을 클릭하시면 텍스트 입력창에 입력됩니다.</p>
+            <div class="history-container">
+                <!-- 발송 내역을 동적으로 추가 하게끔 해야됨 -->
+            </div>
+        </div>
+    </div>
+    <!-- 팝업 구조 추가 -->
+
+
+    <script>
+        let images = []; // 서버에서 받은 이미지 목록을 저장할 배열
+        let currentIndex = 0; //이미지를 나타내는 인덱스
+        const defaultImage = 'basic.png'; // 기본 이미지 경로 설정
+        // DB연결 전이므로 임의의 텍스트 추가
+        let historyData = []; // 문자 내역 
+
+        const generateButton = document.getElementById('generate-button'); // 이미지 생성 버튼
+        const image = document.getElementById('generated-image'); // 생성된 이미지
+        const addPhoneBookButton = document.getElementById('Addphonebook-button');  //주소록 추가 버튼
+
+        const selectedPhoneBook = [];  //선택된 주소록의 배열
+        const addedNumber = [];  //추가된 전화번호의 배열
+        const addedPhoneBook = [];  //추가된 주소록의 배열
+
+        //db에서 이미지 받아오는 함수
+        async function fetchImages() {
+            const response = await fetch('/api/images');
+            images = await response.json();
+            console.log(images);
+            displayImages();
+        }
+        //이미지 나타내는 함수
+        function displayImages() {
+            document.getElementById('history-image-1').src = images[currentIndex] || defaultImage;
+            document.getElementById('history-image-2').src = images[currentIndex + 1] || defaultImage;
+        }
+        //이전 버튼 
+        function prevImages() {
+            if (currentIndex > 0) {
+                currentIndex -= 2;
+                displayImages();
+            }
+        }
+        //다음 버튼
+        function nextImages() {
+            if (currentIndex < images.length - 2) {
+                currentIndex += 2;
+                displayImages();
+            }
+        }
+        //이미지 클릭 함수 메인이미지의 src가 바뀜
+        function updateGeneratedImage(imageId) {
+            const selectedImageSrc = document.getElementById(imageId).src;
+            document.getElementById('generated-image').src = selectedImageSrc;
+        }
+
+        const loadPhonebook = () => {
+            fetch('/api/phonebook')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('네트워크 응답이 실패했습니다.');
+                    }
+                    return response.json(); // 응답을 JSON으로 변환
+                })
+                .then(data => {
+                    console.log("dddddd", data);
+                    historyData = data.message_history
+                    // 리스트 컨테이너 요소 선택
+                    const listContainer = document.getElementById("phone-group");
+
+                    // 각 행에 대해 리스트 아이템을 동적으로 생성
+                    data.phone_book.forEach(row => {
+                        const listItem = document.createElement("div");
+                        listItem.className = "phonebook-list";
+                        listItem.textContent = row;
+
+                        // 리스트 아이템에 클릭 이벤트 추가
+                        listItem.addEventListener("click", function () {
+                            this.classList.toggle("selected");
+
+                            if (this.classList.contains("selected")) {
+                                selectedPhoneBook.push(this.textContent); // 아이템 추가
+                            } else {
+                                // 선택 해제 시 배열에서 제거
+                                const index = selectedPhoneBook.indexOf(this.textContent);
+                                if (index > -1) {
+                                    selectedPhoneBook.splice(index, 1);
+                                }
+                            }
+                        });
+
+                        // 리스트 컨테이너에 아이템 추가
+                        listContainer.appendChild(listItem);
+                    });
+                    //console.log('응답 데이터:', data);
+                })
+                .catch(err => {
+                    console.error('요청 실패:', err);
+                });
+        }
+
+        //화면 로드 시 db에서 주소록, 발송내역 불러옴    
+        window.onload = () => {
+            loadPhonebook();
+        };
+
+        let selectedAspect = ''; // 선택된 주요 관점
+        let selectedMood = ''; // 선택된 그림 분위기
+
+        // 주요 관점 버튼과 분위기 버튼 정의
+        const aspectButtons = document.querySelectorAll('.aspect-button');
+        const moodButtons = document.querySelectorAll('.mood-button');
+
+        // 주요 관점 버튼 클릭 이벤트
+        aspectButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (button.classList.contains('selected')) {
+                    button.classList.remove('selected');
+                    selectedAspect = ''; // 선택 해제
+                } else {
+                    aspectButtons.forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+                    selectedAspect = button.dataset.aspect; // 선택된 관점 저장
+                }
+            });
+        });
+
+        // 그림 분위기 버튼 클릭 이벤트
+        moodButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (button.classList.contains('selected')) {
+                    button.classList.remove('selected');
+                    selectedMood = ''; // 선택 해제
+                } else {
+                    moodButtons.forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+                    selectedMood = button.dataset.mood; // 선택된 분위기 저장
+                }
+            });
+        });
+
+        // 이미지 생성 버튼 클릭 이벤트
+        generateButton.addEventListener('click', async () => {
+            let prompt = document.getElementById('prompt').value;
+            let keyword_input = document.getElementById('keyword-input').value;
+            keyword_input = keyword_input.trim();
+
+            if (!prompt.trim()) {
+                alert('이미지를 생성하기 위해 텍스트를 입력하세요.');
+                return;
+            }
+
+            generateButton.disabled = true;
+            let elapsedTime = 0; // 이미지 생성 시간 표시
+            const originalText = generateButton.textContent;
+            generateButton.textContent = '이미지 생성 중... 0s';
+
+            const interval = setInterval(() => {
+                elapsedTime++;
+                generateButton.textContent = `이미지 생성 중... ${elapsedTime}s`;
+            }, 1000);
+
+            try {
+                const response = await fetch('/generate-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        keyword_input,
+                        aspect: selectedAspect || '기본 관점', // 선택된 관점이 없으면 기본값 설정
+                        mood: selectedMood || '기본 분위기' // 선택된 분위기가 없으면 기본값 설정
+                    })
+                });
+
+                const data = await response.json(); // 받아온 이미지
+                image.src = data.imageUrl; // 이미지 url 표시
+
+
+            } catch (error) {
+                console.error(error);
+                alert('이미지 생성 실패');
+            } finally {
+                clearInterval(interval);
+                generateButton.textContent = originalText;
+                generateButton.disabled = false;
+                fetchImages();
+            }
+        });
+
+
+        const phonenumbersContainer = document.getElementById('phonenumber-list'); // 핸드폰 번호 리스트 컨테이너
+        const phonenumberInput = document.getElementById('phonenumber-input'); // 핸드폰 번호 입력 창
+
+        //전화번호 추가 함수
+        const addList = (value, array) => {
+
+            // 중복 확인
+            if (array.includes(value)) {
+                console.log(`${value}는 이미 추가된 번호입니다.`);
+                alert("해당 주소록의 모든 번호를 삭제하고 다시 시도해주세요.");
+                return; // 이미 추가된 번호는 추가하지 않음
+            }
+
+            const isPhoneNumber = /^\d{11}$/.test(value);
+
+            if (!isPhoneNumber) {
+                fetch(`/api/phonebook/${encodeURIComponent(value)}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('네트워크 응답이 정상적이지 않습니다.');
+                        }
+                        return response.json();
+                    })
+                    .then(phoneNumbers => {
+                        phoneNumbers.forEach(number => {
+                            const phonenumberElement = document.createElement('div');
+                            phonenumberElement.className = 'phonenumber';
+                            phonenumberElement.textContent = `${value} - ${number} `;
+
+                            // X 버튼 추가
+                            const removeButton = document.createElement('span');
+                            removeButton.textContent = 'X';
+                            removeButton.className = 'remove';
+                            removeButton.onclick = () => {
+                                // phonenumbersContainer.removeChild(phonenumberElement);
+                                // array = array.filter((number) => number != value);
+
+                                phonenumbersContainer.removeChild(phonenumberElement);
+                                // 배열에서 제거
+                                array.splice(array.indexOf(value), 1);
+                            };
+
+                            phonenumberElement.appendChild(removeButton);
+                            phonenumbersContainer.appendChild(phonenumberElement);
+                            array.push(value);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('전화번호 가져오기 실패:', error);
+                    });
+            }
+            else {
+                const phonenumberElement = document.createElement('div');
+                phonenumberElement.className = 'phonenumber';
+                phonenumberElement.textContent = value + ' ';
+
+                // X 버튼 추가
+                const removeButton = document.createElement('span');
+                removeButton.textContent = 'X';
+                removeButton.className = 'remove';
+                removeButton.onclick = () => {
+                    // phonenumbersContainer.removeChild(phonenumberElement);
+                    // array = array.filter((number) => number != value);
+
+                    phonenumbersContainer.removeChild(phonenumberElement);
+                    // 배열에서 제거
+                    array.splice(array.indexOf(value), 1); // 배열에서 제거
+                };
+
+                phonenumberElement.appendChild(removeButton);
+                phonenumbersContainer.appendChild(phonenumberElement);
+                array.push(value);
+            }
+        }
+
+        //주소록에서 추가
+        addPhoneBookButton.addEventListener('click', () => {
+            console.log(selectedPhoneBook);
+            // 선택된 상태를 원래 상태로 되돌리기
+            const listItems = document.querySelectorAll(".phonebook-list");
+            listItems.forEach(item => {
+                item.classList.remove("selected"); // CSS 클래스 제거
+            });
+            selectedPhoneBook.map(value => addList(value, addedPhoneBook));
+            selectedPhoneBook.length = 0; // 배열 초기화
+            console.log("선택이 초기화되었습니다."); // 선택 초기화 확인 메시지
+        });
+
+
+        const loadPhonebook2 = () => {
+            fetch('/api/phonebook2')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('네트워크 응답이 실패했습니다.');
+                    }
+                    return response.json(); // 응답을 JSON으로 변환
+                })
+                .then(data => {
+                    console.log("dddddd", data);
+                    historyData = data.message_history
+                })
+                .catch(err => {
+                    console.error('요청 실패:', err);
+                });
+        }
+        
+        //발송하기
+        document.getElementById('send-button').addEventListener('click', () => {
+            // 추가하려는 데이터
+            const prompt = document.getElementById("prompt").value;
+            const dataToSend = {
+                phoneBook: addedPhoneBook, // 기존의 전화번호 데이터
+                imageSrc: image.src,          // img의 src 추가
+                // imageSrc: "https://ideogram.ai/api/images/ephemeral/Y-tCHqY2R1q-JObtZUcgEA.png?exp=1732327512&sig=0c9a14d85375ce9687a6b1f06a4d5651f8e2680ed0a065b4f376bab851f466ea",
+                prompt,
+                phoneNumbers: addedNumber
+            };
+
+            fetch('/api/sendNumbers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dataToSend) // 배열을 JSON 문자열로 변환하여 전송
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('네트워크 응답이 실패했습니다.');
+                    }
+                    return response.json(); // 응답을 JSON으로 변환
+                })
+                .then(data => {
+                    console.log('응답 데이터:', data);
+                    if (data.message == 'Data received') {
+                        alert("전송 완료입니다.");
+                    }
+                    else { alert("전송 실패입니다."); }
+                })
+                .catch(err => {
+                    console.error('요청 실패:', err);
+                });
+                loadPhonebook2();
+        });
+
+        
+
+        // 팝업 관련 코드 추가 ------------------------------------
+
+
+
+        const modal = document.getElementById("myModal"); // 팝업 창
+        const popup = document.getElementById("send-history-button"); // 발송내역 버튼
+        const span = document.getElementsByClassName("close")[0]; // 팝업창의 X 버튼
+        const historyContainer = document.querySelector('.history-container'); // 과거의 발송 내역들
+
+        // 버튼 클릭 시 팝업 열기
+        popup.onclick = function () {
+            modal.style.display = "block";
+            historyContainer.innerHTML = ''; // 이전 내역 초기화
+
+            // 하드코딩된 발송 내역을 DOM에 추가
+            historyData.forEach(item => {
+                const historyItem = document.createElement('div'); // div 요소로 변경
+                historyItem.className = 'history-item'; // 클래스 추가
+                historyItem.innerHTML = item.replace(/\\n/g, "<br>"); // item을 HTML로 변환 db에서 불러오면 \\n이렇게 오기때문에 
+
+                // 클릭 이벤트 추가
+                historyItem.onclick = function () {
+                    // 텍스트 영역에 클릭한 내용 삽입
+                    document.getElementById('prompt').value = item.replace(/\\n/g, '\n'); // db에서 불러온 \\n을 \n으로 변환하여 삽입
+                    modal.style.display = "none"; // 팝업 닫기 (원하는 경우)
+                };
+
+                historyContainer.appendChild(historyItem);
+            });
+        }
+
+
+        // X 버튼 클릭 시 팝업 닫기
+        span.onclick = function () {
+            modal.style.display = "none";
+        }
+
+
+        function handleAspectInput(button) {
+            const inputField = document.getElementById('aspect-input');
+            button.classList.add('selected');
+            inputField.style.display = 'inline-block';
+            inputField.style.maxHeight = '17px';
+            inputField.style.width = '100px';
+            inputField.style.marginLeft = '10px';
+            inputField.focus();
+        }
+
+        function handleAspectBlur(input) {
+            const button = document.querySelector('.aspect-input-button');
+
+            if (input.value.trim() !== '') {
+                selectedAspect = input.value;
+                button.innerText = input.value;
+                button.classList.add('selected');
+            } else {
+                button.innerText = "직접 입력";
+                button.classList.remove('selected');
+            }
+
+            input.style.display = 'none';
+        }
+
+        function handleMoodInput(button) {
+            const inputField = document.getElementById('mood-input');
+            button.classList.add('selected');
+            inputField.style.display = 'inline-block';
+            inputField.style.maxHeight = '17px';
+            inputField.style.width = '100px';
+            inputField.style.marginLeft = '10px';
+            inputField.focus();
+        }
+
+        function handleMoodBlur(input) {
+            const button = document.querySelector('.mood-input-button');
+
+            if (input.value.trim() !== '') {
+                selectedMood = input.value;
+                button.innerText = input.value;
+                button.classList.add('selected');
+            } else {
+                button.innerText = "직접 입력";
+                button.classList.remove('selected');
+            }
+
+            input.style.display = 'none';
+
+        }
+
+        document.querySelectorAll('.aspect-button, .aspect-input-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.aspect-button, .aspect-input-button').forEach(btn => {
+                    if (btn !== button) {
+                        btn.classList.remove('selected');
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.mood-button, .mood-input-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.mood-button, .mood-input-button').forEach(btn => {
+                    if (btn !== button) {
+                        btn.classList.remove('selected');
+                    }
+                });
+            });
+        });
+
+        document.getElementById('add-phonenumber').addEventListener('click', () => {
+            const phonenumber = phonenumberInput.value.trim(); // 입력된 전화번호
+
+            // 유효성 검사: 숫자 11자리만 허용
+            if (/^\d{11}$/.test(phonenumber)) {
+                // 중복 여부 확인
+                const isDuplicate = addedNumber.includes(phonenumber);
+
+                if (isDuplicate) {
+                    alert('이미 추가된 전화번호입니다.');
+                    phonenumberInput.focus(); // 입력 필드에 포커스
+                    return; // 중복이면 추가하지 않음
+                }
+
+                // 유효한 경우, addList 함수를 호출해 동일한 박스를 생성
+                addList(phonenumber, addedNumber);
+                phonenumberInput.value = ''; // 입력 필드 초기화
+                phonenumberInput.focus(); // 입력 필드에 다시 포커스
+            } else {
+                // 유효하지 않은 경우 경고 메시지 표시
+                alert('전화번호는 숫자 11자리여야 합니다.');
+                phonenumberInput.focus(); // 입력 필드에 포커스
+            }
+        });
+    </script>
+</body>
+
+</html>
